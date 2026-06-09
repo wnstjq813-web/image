@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Gallery</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+
+    header .repo-badge {
+      font-size: 0.75rem;
+      background: #21262d;
+      border: 1px solid #30363d;
+      padding: 2px 8px;
+      border-radius: 12px;
+      color: #8b949e;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .toolbar h2 { font-size: 1rem; color: #8b949e; }
+
+    .search-box {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #e6edf3;
+      font-size: 0.875rem;
+      width: 200px;
+      outline: none;
+    }
+
+    .search-box:focus { border-color: #58a6ff; }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .card:hover { border-color: #58a6ff; }
+
+    .card-img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      display: block;
+      background: #0d1117;
+      cursor: pointer;
+    }
+
+    .card-body { padding: 12px; }
+
+    .card-name {
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 8px;
+      word-break: break-all;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .url-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .url-box {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 0.7rem;
+      color: #8b949e;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: monospace;
+    }
+
+    .copy-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #e6edf3;
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+
+    .copy-btn:hover { background: #30363d; }
+    .copy-btn.copied { background: #1a7f37; border-color: #1a7f37; }
+
+    .empty {
+      text-align: center;
+      padding: 80px 0;
+      color: #8b949e;
+    }
+
+    .empty code {
+      display: inline-block;
+      margin-top: 12px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+
+    /* 모달 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal-img {
+      max-width: 90vw;
+      max-height: 85vh;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+
+    .modal-close {
+      position: fixed;
+      top: 16px;
+      right: 20px;
+      font-size: 2rem;
+      color: #fff;
+      cursor: pointer;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Image Gallery</h1>
+  <span class="repo-badge" id="repo-name">wnstjq813-web/image</span>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <h2 id="image-count">이미지 로딩 중...</h2>
+    <input class="search-box" id="search" type="text" placeholder="파일명 검색..." />
+  </div>
+
+  <div class="gallery" id="gallery"></div>
+</div>
+
+<div class="modal-overlay" id="modal" onclick="closeModal()">
+  <span class="modal-close" onclick="closeModal()">&#x2715;</span>
+  <img class="modal-img" id="modal-img" src="" alt="" onclick="event.stopPropagation()" />
+</div>
+
+<script>
+  const REPO = 'wnstjq813-web/image';
+  const BRANCH = 'claude/upbeat-newton-yois5j';
+  const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/images/`;
+  const PAGES_BASE = `https://wnstjq813-web.github.io/image/images/`;
+  const API_URL = `https://api.github.com/repos/${REPO}/contents/images?ref=${BRANCH}`;
+
+  const EXTS = new Set(['.jpg','.jpeg','.png','.gif','.webp','.svg','.bmp']);
+
+  let allImages = [];
+
+  async function loadImages() {
+    try {
+      const res = await fetch(API_URL, {
+        headers: { 'Accept': 'application/vnd.github.v3+json' }
+      });
+      const data = await res.json();
+      allImages = data.filter(f =>
+        f.type === 'file' && EXTS.has(f.name.slice(f.name.lastIndexOf('.')).toLowerCase())
+      );
+      render(allImages);
+    } catch (e) {
+      document.getElementById('image-count').textContent = '이미지를 불러올 수 없습니다.';
+      document.getElementById('gallery').innerHTML = `
+        <div class="empty">
+          <p>GitHub API에서 이미지를 불러올 수 없습니다.</p>
+        </div>`;
+    }
+  }
+
+  function render(images) {
+    const gallery = document.getElementById('gallery');
+    const count = document.getElementById('image-count');
+
+    count.textContent = `이미지 ${images.length}개`;
+
+    if (images.length === 0) {
+      gallery.innerHTML = `
+        <div class="empty">
+          <p>아직 이미지가 없습니다.</p>
+          <code>images/ 폴더에 이미지를 추가하고 push 하세요</code>
+        </div>`;
+      return;
+    }
+
+    gallery.innerHTML = images.map(img => {
+      const rawUrl = RAW_BASE + img.name;
+      return `
+        <div class="card" data-name="${img.name.toLowerCase()}">
+          <img class="card-img" src="${rawUrl}" alt="${img.name}"
+               loading="lazy" onclick="openModal('${rawUrl}')"
+               onerror="this.style.display='none'" />
+          <div class="card-body">
+            <div class="card-name" title="${img.name}">${img.name}</div>
+            <div class="url-row">
+              <div class="url-box" title="${rawUrl}">${rawUrl}</div>
+              <button class="copy-btn" onclick="copyUrl(this, '${rawUrl}')">복사</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function copyUrl(btn, url) {
+    navigator.clipboard.writeText(url).then(() => {
+      btn.textContent = '완료!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1500);
+    });
+  }
+
+  function openModal(src) {
+    document.getElementById('modal-img').src = src;
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+    document.getElementById('modal-img').src = '';
+  }
+
+  document.getElementById('search').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    const filtered = allImages.filter(img => img.name.toLowerCase().includes(q));
+    render(filtered);
+  });
+
+  loadImages();
+</script>
+</body>
+</html>
